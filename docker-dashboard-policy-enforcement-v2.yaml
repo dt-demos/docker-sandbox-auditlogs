@@ -1,0 +1,348 @@
+name: "Docker AI Governance — Policy Enforcement Overview (V2)"
+type: dashboard
+content:
+  annotations: []
+  importedWithCode: false
+  settings:
+    defaultTimeframe:
+      enabled: true
+      value:
+        from: now()-7d
+        to: now()
+  variables:
+    - editable: true
+      key: Org
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[org_name])
+    - editable: true
+      key: ActionType
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[action_type])
+    - editable: true
+      key: Decision
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[decision])
+    - editable: true
+      key: Agent
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[agent])
+  layouts:
+    "0":
+      x: 0
+      "y": 0
+      w: 6
+      h: 3
+    "1":
+      x: 6
+      "y": 0
+      w: 6
+      h: 3
+    "2":
+      x: 12
+      "y": 0
+      w: 6
+      h: 3
+    "3":
+      x: 18
+      "y": 0
+      w: 6
+      h: 3
+    "4":
+      x: 0
+      "y": 3
+      w: 16
+      h: 6
+    "5":
+      x: 16
+      "y": 3
+      w: 8
+      h: 6
+    "6":
+      x: 0
+      "y": 9
+      w: 12
+      h: 6
+    "7":
+      x: 12
+      "y": 9
+      w: 12
+      h: 6
+    "8":
+      x: 0
+      "y": 15
+      w: 24
+      h: 6
+    "9":
+      x: 0
+      "y": 21
+      w: 24
+      h: 8
+  tiles:
+    "0":
+      title: "Total Audit Events"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[decision], array($Decision))
+        | filter in(json[agent], array($Agent))
+        | summarize total = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "Total Events"
+          recordField: total
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "1":
+      title: "Allow Rate"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[category] == "AUDIT_CATEGORY_EVALUATION"
+        | summarize allows = countIf(json[decision] == "AUDIT_DECISION_ALLOW"), total = count()
+        | fieldsAdd allow_rate = if(total > 0, then: toDouble(allows) / toDouble(total) * 100, else: 0.0)
+        | fields allow_rate
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "Allow Rate %"
+          recordField: allow_rate
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "2":
+      title: "Enforced Denials"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[decision] == "AUDIT_DECISION_DENY"
+        | filter json[enforcement_mode] == "enforce"
+        | summarize deny_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "Enforced Denials"
+          recordField: deny_count
+        thresholds:
+          - field: deny_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#c62239" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "3":
+      title: "Total Denials"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[decision] == "AUDIT_DECISION_DENY"
+        | summarize deny_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "Total Denials"
+          recordField: deny_count
+        thresholds:
+          - field: deny_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#eea53c" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "4":
+      title: "Decision Trend Over Time"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[category] == "AUDIT_CATEGORY_EVALUATION"
+        | fieldsAdd decision = json[decision]
+        | makeTimeseries cnt = count(), interval:1h, by:{decision}
+      visualization: areaChart
+      visualizationSettings:
+        autoSelectVisualization: false
+        chartSettings:
+          legend:
+            position: bottom
+            showLegend: true
+          stacked: true
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "5":
+      title: "Denials by Action Type"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[agent], array($Agent))
+        | filter json[decision] == "AUDIT_DECISION_DENY"
+        | summarize deny_count = count(), by:{action_type = json[action_type]}
+        | sort deny_count desc
+      visualization: pieChart
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "6":
+      title: "Top Denied Users"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[decision] == "AUDIT_DECISION_DENY"
+        | summarize deny_count = count(), by:{username = json[username]}
+        | sort deny_count desc
+        | limit 20
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "7":
+      title: "Top Active Agents"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[decision], array($Decision))
+        | summarize total = count(), denials = countIf(json[decision] == "AUDIT_DECISION_DENY"), by:{agent = json[agent]}
+        | sort total desc
+        | limit 20
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "8":
+      title: "Policy Rule Hit Frequency"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[agent], array($Agent))
+        | filter json[category] == "AUDIT_CATEGORY_EVALUATION"
+        | summarize cnt = count(), by:{policy_rule = json[policy_rule], action_type = json[action_type], decision = json[decision]}
+        | sort cnt desc
+        | limit 50
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "9":
+      title: "Event Detail"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[action_type], array($ActionType))
+        | filter in(json[decision], array($Decision))
+        | filter in(json[agent], array($Agent))
+        | fields timestamp, username = json[username], agent = json[agent], action_type = json[action_type], decision = json[decision], policy_rule = json[policy_rule], resource_id = json[resource_id], org_name = json[org_name]
+        | sort timestamp desc
+        | limit 100
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+        table:
+          columnWidths:
+            '["resource_id"]': 250
+            '["policy_rule"]': 200
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true

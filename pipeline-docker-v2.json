@@ -1,0 +1,117 @@
+{
+  "customId": "extension:docker-sandbox-audit-log-v2",
+  "displayName": "Docker Sandbox Audit Logs v2",
+  "metadataList": [],
+  "routing": "routable",
+  "processing": {
+    "processors": [
+      {
+        "description": "Build content from full AuditRecord envelope and payload",
+        "enabled": true,
+        "id": "processor_set_content",
+        "matcher": "true",
+        "type": "dql",
+        "dql": {
+          "script": "fieldsAdd content = concat(\n  \"{\",\n  \"\\\"audit_event_id\\\":\\\"\", coalesce(audit_event_id, \"\"), \"\\\",\",\n  \"\\\"timestamp\\\":\\\"\", toString(timestamp), \"\\\",\",\n  \"\\\"schema_version\\\":\\\"\", coalesce(schema_version, \"\"), \"\\\",\",\n  \"\\\"category\\\":\\\"\", coalesce(category, \"\"), \"\\\",\",\n  \"\\\"decision\\\":\\\"\", coalesce(decision, \"\"), \"\\\",\",\n  \"\\\"action_type\\\":\\\"\", coalesce(action_type, \"\"), \"\\\",\",\n  \"\\\"enforcement_mode\\\":\\\"\", coalesce(enforcement_mode, \"\"), \"\\\",\",\n  \"\\\"username\\\":\\\"\", coalesce(username, \"\"), \"\\\",\",\n  \"\\\"user_email\\\":\\\"\", coalesce(user_email, \"\"), \"\\\",\",\n  \"\\\"auth_method\\\":\\\"\", coalesce(auth_method, \"\"), \"\\\",\",\n  \"\\\"oauth_client_id\\\":\\\"\", coalesce(oauth_client_id, \"\"), \"\\\",\",\n  \"\\\"agent\\\":\\\"\", coalesce(agent, \"\"), \"\\\",\",\n  \"\\\"org_id\\\":\\\"\", coalesce(org_id, \"\"), \"\\\",\",\n  \"\\\"org_name\\\":\\\"\", coalesce(org_name, \"\"), \"\\\",\",\n  \"\\\"audit_session_id\\\":\\\"\", coalesce(audit_session_id, \"\"), \"\\\",\",\n  \"\\\"sandbox_id\\\":\\\"\", coalesce(sandbox_id, \"\"), \"\\\",\",\n  \"\\\"resource_id\\\":\\\"\", coalesce(resource_id, \"\"), \"\\\",\",\n  \"\\\"policy_id\\\":\\\"\", coalesce(policy_id, \"\"), \"\\\",\",\n  \"\\\"policy_rule\\\":\\\"\", coalesce(policy_rule, \"\"), \"\\\",\",\n  \"\\\"policy_name\\\":\\\"\", coalesce(policy_name, \"\"), \"\\\",\",\n  \"\\\"policy_type\\\":\\\"\", coalesce(policy_type, \"\"), \"\\\",\",\n  \"\\\"policy_source\\\":\\\"\", coalesce(policy_source, \"\"), \"\\\",\",\n  \"\\\"policy_version\\\":\\\"\", coalesce(policy_version, \"\"), \"\\\",\",\n  \"\\\"os\\\":\\\"\", coalesce(os, \"\"), \"\\\",\",\n  \"\\\"app_version\\\":\\\"\", coalesce(app_version, \"\"), \"\\\",\",\n  \"\\\"client_name\\\":\\\"\", coalesce(client_name, \"\"), \"\\\",\",\n  \"\\\"hostname\\\":\\\"\", coalesce(hostname, \"\"), \"\\\",\",\n  \"\\\"payload\\\":\", coalesce(tool_invocation, resource_read, server_registration, session, prompt, network_egress, filesystem_mount, policy_sync, tool_execution, resource_read_execution, network_egress_execution, filesystem_mount_execution, prompt_execution, pii_detection, c_score_report, policy_action, \"null\"),\n  \"}\")"
+        }
+      },
+      {
+        "description": "Set log.source, host.name, and docker.audit.* mapped attributes",
+        "enabled": true,
+        "id": "processor_map_attributes",
+        "matcher": "true",
+        "type": "dql",
+        "dql": {
+          "script": "fieldsAdd log.source = \"docker-sandbox-auditlogs\"\n| fieldsAdd host.name = hostname\n| fieldsAdd docker.audit.org_id = org_id\n| fieldsAdd docker.audit.session_id = audit_session_id\n| fieldsAdd docker.audit.category = category\n| fieldsAdd docker.audit.action_type = action_type\n| fieldsAdd docker.audit.decision = decision\n| fieldsAdd docker.audit.enforcement_mode = enforcement_mode"
+        }
+      },
+      {
+        "description": "Extract docker.audit.cscore_band from c_score_report payload",
+        "enabled": true,
+        "id": "processor_extract_cscore_band",
+        "matcher": "isNotNull(c_score_report)",
+        "type": "dql",
+        "dql": {
+          "script": "parse c_score_report, \"JSON:cs\"\n| fieldsAdd docker.audit.cscore_band = cs[band]\n| fieldsRemove cs"
+        }
+      },
+      {
+        "description": "Set loglevel from decision and enforcement_mode",
+        "enabled": true,
+        "id": "processor_set_loglevel",
+        "matcher": "true",
+        "type": "dql",
+        "dql": {
+          "script": "fieldsAdd loglevel = if(decision == \"AUDIT_DECISION_DENY\" and enforcement_mode == \"enforce\", \"ERROR\",\n  else: if(decision == \"AUDIT_DECISION_DENY\", \"WARN\",\n  else: \"INFO\"))"
+        }
+      },
+      {
+        "description": "Remove all original Docker source fields",
+        "enabled": true,
+        "id": "processor_remove_source_fields",
+        "matcher": "true",
+        "type": "fieldsRemove",
+        "fieldsRemove": {
+          "fields": [
+            "action_type",
+            "agent",
+            "app_version",
+            "approval",
+            "audit_event_id",
+            "audit_session_id",
+            "auth_method",
+            "c_score_report",
+            "category",
+            "client_name",
+            "decision",
+            "deny_reason",
+            "diagnostics",
+            "enforcement_mode",
+            "filesystem_mount",
+            "filesystem_mount_execution",
+            "hostname",
+            "network_egress",
+            "network_egress_execution",
+            "oauth_client_id",
+            "org_id",
+            "org_name",
+            "os",
+            "pii_detection",
+            "policy_action",
+            "policy_id",
+            "policy_mutation",
+            "policy_name",
+            "policy_rule",
+            "policy_source",
+            "policy_sync",
+            "policy_type",
+            "policy_version",
+            "prompt",
+            "prompt_execution",
+            "resource_id",
+            "resource_read",
+            "resource_read_execution",
+            "roles",
+            "sandbox_id",
+            "schema_version",
+            "server_registration",
+            "session",
+            "tool_execution",
+            "tool_invocation",
+            "user_email",
+            "username"
+          ]
+        }
+      }
+    ]
+  },
+  "securityContext": { "processors": [] },
+  "costAllocation": { "processors": [] },
+  "productAllocation": { "processors": [] },
+  "storage": { "processors": [] },
+  "smartscapeNodeExtraction": { "processors": [] },
+  "smartscapeEdgeExtraction": { "processors": [] },
+  "metricExtraction": { "processors": [] },
+  "davis": { "processors": [] },
+  "dataExtraction": { "processors": [] }
+}

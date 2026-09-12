@@ -1,0 +1,312 @@
+name: "Docker AI Risk Monitor — C-Score & Anomaly Signals (V2)"
+type: dashboard
+content:
+  annotations: []
+  importedWithCode: false
+  settings:
+    defaultTimeframe:
+      enabled: true
+      value:
+        from: now()-7d
+        to: now()
+  variables:
+    - editable: true
+      key: Org
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[org_name])
+    - editable: true
+      key: RiskBand
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter json[action_type] == "c_score_report"
+        | summarize values = collectDistinct(json[payload][band])
+    - editable: true
+      key: Agent
+      multiple: true
+      type: query
+      version: 2
+      visible: true
+      input: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | summarize values = collectDistinct(json[agent])
+  layouts:
+    "0":
+      x: 0
+      "y": 0
+      w: 6
+      h: 3
+    "1":
+      x: 6
+      "y": 0
+      w: 6
+      h: 3
+    "2":
+      x: 12
+      "y": 0
+      w: 6
+      h: 3
+    "3":
+      x: 18
+      "y": 0
+      w: 6
+      h: 3
+    "4":
+      x: 0
+      "y": 3
+      w: 16
+      h: 6
+    "5":
+      x: 16
+      "y": 3
+      w: 8
+      h: 6
+    "6":
+      x: 0
+      "y": 9
+      w: 12
+      h: 6
+    "7":
+      x: 12
+      "y": 9
+      w: 12
+      h: 6
+    "8":
+      x: 0
+      "y": 15
+      w: 24
+      h: 8
+  tiles:
+    "0":
+      title: "RED Band Sessions"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "c_score_report"
+        | filter json[payload][band] == "C_SCORE_BAND_RED"
+        | summarize red_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "RED Band"
+          recordField: red_count
+        thresholds:
+          - field: red_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#c62239" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "1":
+      title: "ORANGE Band Sessions"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "c_score_report"
+        | filter json[payload][band] == "C_SCORE_BAND_ORANGE"
+        | summarize orange_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "ORANGE Band"
+          recordField: orange_count
+        thresholds:
+          - field: orange_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#eea53c" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "2":
+      title: "PII Detections"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "pii_detection"
+        | summarize pii_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "PII Detections"
+          recordField: pii_count
+        thresholds:
+          - field: pii_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#eea53c" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "3":
+      title: "Approval Timeouts"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[decision] == "AUDIT_DECISION_APPROVAL_TIMEOUT"
+        | summarize timeout_count = count()
+      visualization: singleValue
+      visualizationSettings:
+        autoSelectVisualization: false
+        singleValue:
+          showLabel: true
+          label: "Approval Timeouts"
+          recordField: timeout_count
+        thresholds:
+          - field: timeout_count
+            id: 1
+            isEnabled: true
+            rules:
+              - { color: { Default: "#2f6862" }, comparator: "<=", id: 0, value: 0 }
+              - { color: { Default: "#eea53c" }, comparator: ">", id: 1, value: 0 }
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "4":
+      title: "Risk Band Trend Over Time"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "c_score_report"
+        | fieldsAdd band = json[payload][band]
+        | makeTimeseries cnt = count(), interval:1h, by:{band}
+      visualization: areaChart
+      visualizationSettings:
+        autoSelectVisualization: false
+        chartSettings:
+          legend:
+            position: bottom
+            showLegend: true
+          stacked: true
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "5":
+      title: "Current Band by User"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "c_score_report"
+        | summarize last_band = last(json[payload][band]), score_events = count(), by:{username = json[username]}
+        | sort score_events desc
+        | limit 20
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "6":
+      title: "C-Score Sub-scores Detail"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[agent], array($Agent))
+        | filter json[action_type] == "c_score_report"
+        | fields timestamp, username = json[username], band = json[payload][band], c_score = json[payload][c_score], dp = json[payload][dp_score], cm = json[payload][cm_score], ce = json[payload][ce_score], pt = json[payload][pt_score], sv = json[payload][sv_score]
+        | sort timestamp desc
+        | limit 50
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "7":
+      title: "PII Detection Events"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter json[action_type] == "pii_detection"
+        | summarize cnt = count(), by:{tool_name = json[payload][tool_name], direction = json[payload][direction], action_taken = json[payload][action_taken]}
+        | sort cnt desc
+        | limit 30
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
+    "8":
+      title: "High-Risk & Denied Events Detail"
+      type: data
+      query: |
+        fetch logs
+        | filter log.source == "docker-sandbox-auditlogs"
+        | parse content, "JSON:json"
+        | filter in(json[org_name], array($Org))
+        | filter in(json[agent], array($Agent))
+        | filter json[decision] == "AUDIT_DECISION_DENY" or json[action_type] == "c_score_report"
+        | fields timestamp, username = json[username], agent = json[agent], action_type = json[action_type], decision = json[decision], policy_rule = json[policy_rule], resource_id = json[resource_id], org_name = json[org_name]
+        | sort timestamp desc
+        | limit 100
+      visualization: table
+      visualizationSettings:
+        autoSelectVisualization: false
+        table:
+          columnWidths:
+            '["resource_id"]': 250
+            '["policy_rule"]': 180
+      davis:
+        enabled: false
+        davisVisualization:
+          isAvailable: true
